@@ -7,6 +7,9 @@
       <van-notice-bar left-icon="info-o" :scrollable="false">
         所有处理均在浏览器内完成，文件不会上传服务器
       </van-notice-bar>
+      <van-notice-bar left-icon="smile-o" :scrollable="false" color="#07c160" background="#ecfaf3">
+        微信用户：请用系统浏览器（Safari/Chrome）打开本页，微信收到的文件请先「保存到手机/文件」再选择
+      </van-notice-bar>
     </div>
 
     <!-- 功能入口 -->
@@ -59,7 +62,8 @@ const features = [
   { name: '音频剪辑', desc: '截取音频指定时间段', path: '/audio-cut', icon: 'music-o', color: 'linear-gradient(135deg,#07c160,#06ad56)' },
   { name: '音频合并', desc: '将多个音频拼接为一个', path: '/audio-merge', icon: 'apps-o', color: 'linear-gradient(135deg,#ff976a,#ee0a24)' },
   { name: '音频处理', desc: '音量/变速/淡入淡出', path: '/audio-cut', icon: 'tosend', color: 'linear-gradient(135deg,#7232dd,#a845de)' },
-  { name: '链接下载', desc: '粘贴链接播放并下载', path: '/link-download', icon: 'down', color: 'linear-gradient(135deg,#f90,#ff6600)' }
+  { name: '链接下载', desc: '粘贴公开直链播放并下载', path: '/link-download', icon: 'down', color: 'linear-gradient(135deg,#f90,#ff6600)' },
+  { name: '曲库搜索', desc: '多源免费曲库：Openverse / Archive / ccMixter / 电台', path: '/music-search', icon: 'search', color: 'linear-gradient(135deg,#07c160,#1989fa)' }
 ]
 
 const goTo = (path) => router.push(path)

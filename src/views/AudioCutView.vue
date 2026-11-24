@@ -35,31 +35,23 @@
       <!-- 波形 + 时间标尺 -->
       <van-cell>
         <template #title>
-          <div class="waveform-box">
+          <div class="waveform-box" @touchstart="onPinchStart" @touchmove="onPinchMove" @touchend="onPinchEnd" @touchcancel="onPinchEnd">
             <div ref="waveformEl" class="waveform"></div>
             <div v-if="!wavesurferReady" class="waveform-loading">
               <van-loading size="24px">波形解码中...</van-loading>
             </div>
             <div v-if="wavesurferReady" class="zoom-bar">
-              <div class="ctrl-btn zoom-btn" @click="applyZoom(zoomIndex - 1)">
-                <van-icon name="minus" size="16" />
+              <div class="ctrl-btn zoom-btn" :class="{ disabled: zoomIndex === 0 }" @click="applyZoom(zoomIndex - 1)">
+                <van-icon name="minus" size="20" />
               </div>
-              <van-slider
-                class="zoom-slider"
-                :model-value="zoomIndex"
-                :min="0"
-                :max="ZOOM_LEVELS.length - 1"
-                :step="1"
-                @update:model-value="applyZoom"
-              />
-              <div class="ctrl-btn zoom-btn" @click="applyZoom(zoomIndex + 1)">
-                <van-icon name="plus" size="16" />
+              <div class="zoom-label" @click="applyZoom(0)">{{ zoomLabel }}</div>
+              <div class="ctrl-btn zoom-btn" :class="{ disabled: zoomIndex === ZOOM_LEVELS.length - 1 }" @click="applyZoom(zoomIndex + 1)">
+                <van-icon name="plus" size="20" />
               </div>
-              <van-button size="mini" plain hairline @click="applyZoom(0)">适应全部</van-button>
             </div>
           </div>
           <div class="drag-hint">
-            <van-icon name="info-o" /> 可拖拽选区边界或整体移动选区；放大波形可精确定位到毫秒；开始/结束时间支持直接输入（如 00:01.500 或 1.5）
+            <van-icon name="info-o" /> 拖动蓝色边界调整选区、拖中间整体移动；双指捏合或 ± 按钮缩放波形；时间支持直接输入（如 00:01.500 或 1.5）
           </div>
         </template>
       </van-cell>
@@ -68,28 +60,36 @@
       <van-cell>
         <template #title>
           <div class="player-bar">
-            <div class="ctrl-btn play-btn" @click="togglePlay">
-              <van-icon :name="isPlaying ? 'pause-circle-o' : 'play-circle-o'" size="32" :color="isPlaying ? '#ee0a24' : '#1989fa'" />
-            </div>
-            <div class="ctrl-btn" @click="stopPlay">
-              <van-icon name="stop-circle-o" size="26" color="#969799" />
+            <div class="ctrl-btn" @click="nudgeTime(-1)" title="后退 1 秒">
+              <span class="nudge-label">-1s</span>
             </div>
             <div class="ctrl-btn" @click="nudgeTime(-0.1)" title="后退 0.1 秒">
-              <van-icon name="arrow-left" size="18" color="#1989fa" />
+              <van-icon name="arrow-left" size="20" color="#1989fa" />
             </div>
+            <div class="ctrl-btn play-btn" @click="togglePlay">
+              <van-icon :name="isPlaying ? 'pause-circle-o' : 'play-circle-o'" size="44" :color="isPlaying ? '#ee0a24' : '#1989fa'" />
+            </div>
+            <div class="ctrl-btn" @click="nudgeTime(0.1)" title="前进 0.1 秒">
+              <van-icon name="arrow-right" size="20" color="#1989fa" />
+            </div>
+            <div class="ctrl-btn" @click="nudgeTime(1)" title="前进 1 秒">
+              <span class="nudge-label">+1s</span>
+            </div>
+          </div>
+          <div class="player-sub">
             <div class="time-display">
               <span class="cur-time">{{ formatTimeMs(currentTime) }}</span>
               <span class="sep">/</span>
               <span class="dur-time">{{ formatTimeMs(duration) }}</span>
             </div>
-            <div class="ctrl-btn" @click="nudgeTime(0.1)" title="前进 0.1 秒">
-              <van-icon name="arrow-right" size="18" color="#1989fa" />
+            <div class="ctrl-btn" @click="stopPlay" title="回到选区起点并暂停">
+              <van-icon name="stop-circle-o" size="26" color="#969799" />
             </div>
             <div class="ctrl-btn" @click="seekToStart" title="跳到选区起点">
-              <van-icon name="aim" size="24" color="#1989fa" />
+              <van-icon name="aim" size="26" color="#1989fa" />
             </div>
             <div :class="['ctrl-btn', 'loop-btn', { active: loopRegion }]" @click="loopRegion = !loopRegion" title="循环播放选区">
-              <van-icon name="replay" size="24" />
+              <van-icon name="replay" size="26" />
             </div>
           </div>
         </template>
@@ -141,6 +141,7 @@
             <van-button size="small" plain icon="replay" @click="resetRegion">重置选区</van-button>
             <van-button size="small" plain icon="play-circle-o" @click="playRegion">试听选区</van-button>
             <van-button size="small" plain @click="setRegionFromCurrent">设当前为起点</van-button>
+            <van-button size="small" plain @click="setRegionEndFromCurrent">设当前为终点</van-button>
           </div>
         </template>
       </van-cell>
@@ -187,12 +188,13 @@
       </van-cell>
     </van-cell-group>
 
-    <!-- 操作按钮 -->
+    <!-- 操作按钮（吸底，手机端随时可点） -->
     <div class="action-area">
       <van-button
         type="primary"
         block
         round
+        size="large"
         :disabled="!selectedFile || processing"
         :loading="processing"
         loading-text="处理中..."
@@ -256,6 +258,7 @@ const endTime = ref(0)
 // 波形缩放：0 = 适应全部，越大每秒像素越多（可精确定位到毫秒）
 const ZOOM_LEVELS = [0, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 const zoomIndex = ref(0)
+const zoomLabel = computed(() => zoomIndex.value === 0 ? '全景' : `${ZOOM_LEVELS[zoomIndex.value]} px/s`)
 
 // 起止点边界：保证 start < end（最小间隔 1ms）
 const startMax = computed(() => Math.max(0, endTime.value - 0.001))
@@ -524,11 +527,39 @@ const nudgeTime = (delta) => {
 }
 
 // 波形缩放：index 对应 ZOOM_LEVELS 等级，0 = 适应全部
+// 限流：zoom 会整体重绘波形，高频触发（如双指捏合）会造成画面闪烁/卡顿
+let zoomThrottleTimer = 0
+let zoomPendingIndex = null
 const applyZoom = (idx) => {
   if (!wavesurfer || !wavesurferReady.value) return
-  const i = Math.min(Math.max(0, Math.round(idx)), ZOOM_LEVELS.length - 1)
-  zoomIndex.value = i
-  wavesurfer.zoom(ZOOM_LEVELS[i])
+  zoomPendingIndex = Math.min(Math.max(0, Math.round(idx)), ZOOM_LEVELS.length - 1)
+  zoomIndex.value = zoomPendingIndex
+  if (zoomThrottleTimer) return
+  zoomThrottleTimer = setTimeout(() => {
+    zoomThrottleTimer = 0
+    if (zoomPendingIndex !== null && wavesurfer) {
+      wavesurfer.zoom(ZOOM_LEVELS[zoomPendingIndex])
+    }
+  }, 120)
+}
+
+// 双指捏合缩放波形（移动端手势）
+let pinchStartDist = 0
+let pinchStartIndex = 0
+const touchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+const onPinchStart = (e) => {
+  if (e.touches.length !== 2) return
+  pinchStartDist = touchDist(e.touches)
+  pinchStartIndex = zoomIndex.value
+}
+const onPinchMove = (e) => {
+  if (e.touches.length !== 2 || !pinchStartDist) return
+  e.preventDefault()
+  const ratio = touchDist(e.touches) / pinchStartDist
+  applyZoom(pinchStartIndex + Math.round(Math.log2(ratio) * 2))
+}
+const onPinchEnd = () => {
+  pinchStartDist = 0
 }
 
 const seekToStart = () => {
@@ -561,6 +592,17 @@ const setRegionFromCurrent = () => {
   isSyncing = true
   startTime.value = newStart
   region.setOptions({ start: newStart })
+  isSyncing = false
+}
+
+// 把当前播放游标位置设为选区终点
+const setRegionEndFromCurrent = () => {
+  if (!wavesurfer || !region) return
+  const cur = wavesurfer.getCurrentTime()
+  const newEnd = Math.max(cur, startTime.value + 0.1)
+  isSyncing = true
+  endTime.value = newEnd
+  region.setOptions({ end: newEnd })
   isSyncing = false
 }
 
@@ -697,20 +739,72 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
 }
-// 播放控制条
+// 缩放控制条：横向排布 + 大触控目标（修复此前缺失样式导致的竖排错乱）
+.zoom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+.zoom-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #ebedf0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  &.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+}
+.zoom-label {
+  min-width: 84px;
+  height: 32px;
+  line-height: 30px;
+  padding: 0 10px;
+  text-align: center;
+  font-size: 12px;
+  font-family: monospace;
+  color: #1989fa;
+  background: rgba(25, 137, 250, 0.08);
+  border: 1px solid rgba(25, 137, 250, 0.35);
+  border-radius: 16px;
+  cursor: pointer;
+  user-select: none;
+}
+// 播放控制条：主控制一行、辅助控制一行，按钮均 ≥40px 触控区
 .player-bar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
   width: 100%;
-  padding: 4px 0;
+  padding: 4px 8px;
+}
+.player-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 0 8px;
+}
+.nudge-label {
+  font-size: 12px;
+  font-weight: bold;
+  font-family: monospace;
+  color: #1989fa;
 }
 .ctrl-btn {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
   cursor: pointer;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
   &:active {
     opacity: 0.6;
   }
@@ -755,6 +849,14 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 8px;
 }
+// 主操作按钮吸底：滚动时始终停留在 Tab 栏上方，手机端单手可达
+.action-area {
+  position: sticky;
+  bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  z-index: 99;
+  padding: 10px 16px;
+  background: linear-gradient(to top, #f7f8fa 75%, rgba(247, 248, 250, 0));
+}
 .progress-box {
   text-align: center;
 }
@@ -775,9 +877,10 @@ onUnmounted(() => {
   border-radius: 3px;
 }
 :deep(.region-resize-handle) {
-  width: 8px !important;
+  width: 14px !important;
   background: #1989fa !important;
-  border-radius: 2px;
+  border-radius: 3px;
   cursor: ew-resize;
+  touch-action: none;
 }
 </style>

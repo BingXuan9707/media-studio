@@ -46,10 +46,10 @@ import { useFileStore } from './store/file'
 // 底部导航配置：5个核心功能
 const tabs = [
   { name: '首页', path: '/home', icon: 'home-o' },
-  { name: '视频转音频', path: '/video-to-audio', icon: 'video-o' },
-  { name: '音频剪辑', path: '/audio-cut', icon: 'music-o' },
-  { name: '音频合并', path: '/audio-merge', icon: 'apps-o' },
-  { name: '链接下载', path: '/link-download', icon: 'down' }
+  { name: '剪辑', path: '/audio-cut', icon: 'music-o' },
+  { name: '合并', path: '/audio-merge', icon: 'apps-o' },
+  { name: '链接', path: '/link-download', icon: 'down' },
+  { name: '曲库', path: '/music-search', icon: 'search' }
 ]
 
 const route = useRoute()
@@ -71,6 +71,7 @@ const dragSummary = computed(() => {
 })
 
 const currentTitle = computed(() => {
+  if (route.meta?.title) return route.meta.title
   const tab = tabs.find(t => t.path === route.path)
   return tab ? tab.name : '音视频处理工具'
 })

@@ -9,7 +9,26 @@ let loadingPromise = null
 
 // Vite 官方静态资源引用语法：new URL('相对路径', import.meta.url).href
 const CORE_SRC = new URL('../assets/ffmpeg/ffmpeg-core.js', import.meta.url).href
-const WASM_SRC = new URL('../assets/ffmpeg/ffmpeg-core.wasm', import.meta.url).href
+// wasm 太大（31MB）超过 Cloudflare Pages 25MB 上传限制，因此 gzip 预压缩为 .gz（约10MB）
+// 加载时用浏览器的 DecompressionStream 解压后生成 Blob URL 供 FFmpeg 使用
+const WASM_SRC = new URL('../assets/ffmpeg/ffmpeg-core.wasm.gz', import.meta.url).href
+
+// 获取 wasm Blob：.gz 源需要手动 gzip 解压
+// 注意：部分服务器（如 Vite dev server）会对 .gz 文件响应 Content-Encoding: gzip，
+// 浏览器的 fetch 会透明解压，此时拿到的已经是原始 wasm，不能再解压一次。
+// 因此用 gzip 魔数（0x1f 0x8b）判断是否真的还需要解压。
+async function fetchWasmBlob(src) {
+  const res = await fetch(src)
+  if (!res.ok) throw new Error(`获取 wasm 失败: HTTP ${res.status}`)
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  const isGzip = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
+  if (!isGzip) return new Blob([bytes], { type: 'application/wasm' })
+  // 浏览器原生 gzip 解压
+  const ds = new DecompressionStream('gzip')
+  const stream = new Blob([bytes]).stream().pipeThrough(ds)
+  const buf = await new Response(stream).arrayBuffer()
+  return new Blob([buf], { type: 'application/wasm' })
+}
 
 // 捕获 FFmpeg 最后一条日志用于错误诊断
 let lastLog = ''
@@ -43,8 +62,11 @@ export async function loadFFmpeg() {
       // toBlobURL 是 @ffmpeg/util 提供的：fetch → Blob → blob: URL
       // 这是 FFmpeg.wasm 官方推荐的加载方式，能确保 _locateFile 正确工作
       const coreURL = await toBlobURL(CORE_SRC, 'text/javascript')
-      const wasmURL = await toBlobURL(WASM_SRC, 'application/wasm')
+      // wasm 已 gzip 预压缩，用 fetchWasmBlob 解压后转 Blob URL
+      const wasmBlob = await fetchWasmBlob(WASM_SRC)
+      const wasmURL = URL.createObjectURL(wasmBlob)
       await ffmpeg.load({ coreURL, wasmURL })
+      URL.revokeObjectURL(wasmURL)
       return ffmpeg
     } catch (e) {
       ffmpeg = null
